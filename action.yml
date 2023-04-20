@@ -1,0 +1,57 @@
+name: "Svix Proxy"
+description: "Use Svix proxy to tunnel publicly accessible URL to action runner port"
+
+branding:
+  icon: "activity"
+  color: "gray-dark"
+
+inputs:
+  port:
+    description: "Local port to proxy traffic to"
+    required: true
+  logging:
+    description: "Enable postback logs (logs a URL you can visit to view requests proxied)"
+    required: false
+    default: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download Svix executable
+      uses: actions/download-artifact@v2
+      with:
+        name: svix
+        path: svix.tar.gz
+        repository: svixhq/svix-cli
+        ref: v0.19.0
+        if: runner.os == 'Linux' && runner.arch == 'x64'
+    - run: tar -xf svix.tar.gz
+      shell: bash
+    - run: mv svix /usr/local/bin/
+      shell: bash
+    - name: Start Svix Proxy
+      shell: bash
+      run: |
+        # Start the svix command in the background
+        echo "Starting Svix Proxy"
+        svix listen ${{ inputs.port }}${{ inputs.logging && ' --no-logging' || '' }} >/tmp/svix.log &
+
+        # Watch Svix logs for 15 seconds
+        timeout=15
+        SECONDS=0
+        # Check logs until timeout
+        while [ $SECONDS -lt $timeout ]; do
+	        postback_url=$(grep "https://play.svix.com/in/" /tmp/svix.log)
+	        if [ -n "$postback_url" ]; then
+		        # Found postback URL so set it in the output
+		        echo "postback_url=$postback_url" >>"$GITHUB_OUTPUT"
+		        # echo the CLI stdout
+		        cat /tmp/svix.log
+		        exit 0
+	        fi
+          sleep 1
+          echo "Waiting for Svix postback URL..."
+        done
+
+        echo "Timeout reached, no postback URLL found"
+        exit 1
