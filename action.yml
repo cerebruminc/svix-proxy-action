@@ -1,0 +1,59 @@
+name: "Svix Proxy"
+description: "Use Svix proxy to tunnel publicly accessible URL to action runner port"
+
+branding:
+  icon: "activity"
+  color: "gray-dark"
+
+inputs:
+  port:
+    description: "Local port to proxy traffic to"
+    required: true
+  logging:
+    description: "Enable postback logs (logs a URL you can visit to view requests proxied)"
+    required: false
+    default: false
+
+outputs:
+  postback_url:
+    description: "URL the proxy is publicly available on"
+    value: ${{ steps.proxy.outputs.postback_url }}
+
+runs:
+  using: "composite"
+  steps:
+    - run: wget https://github.com/svix/svix-cli/releases/download/v0.19.0/svix_0.19.0_linux_amd64.deb
+      shell: bash
+    - run: sudo dpkg -i svix_0.19.0_linux_amd64.deb
+      shell: bash
+    - run: sudo apt-get install colorized-logs # this is to strip ansi chars from svix stdout
+      shell: bash
+    - name: Start Svix proxy
+      id: proxy
+      shell: bash
+      run: |
+        # Start the svix command in the background so once this step finishes, svix will still be running in the action runner instance for the next step to use the callback_url output
+        touch /tmp/svix.log
+        svix listen ${{ inputs.port }}${{ inputs.logging && ' --no-logging' || '' }} >/tmp/svix.log &
+
+        # Watch Svix logs for 15 seconds
+        timeout=15
+        SECONDS=0
+        # Check logs until timeout
+        echo "Waiting for proxy postback URL..."
+        while [ $SECONDS -lt $timeout ]; do
+         # return true in grep so that it doesn't return 1 and close the script when no match is found
+         postback_url=$(cat /tmp/svix.log | ansi2txt | grep "https://play.svix.com/in/" || true)
+         if [ -n "$postback_url" ]; then
+          # Found postback URL 
+          echo "postback_url=$postback_url" >>"$GITHUB_OUTPUT"
+          # echo the CLI stdout
+          cat /tmp/svix.log | ansi2txt
+          exit 0
+         fi
+          sleep 1
+          echo "Waiting for proxy postback URL..."
+        done
+
+        echo "Timeout reached, no postback URL found"
+        exit 1
