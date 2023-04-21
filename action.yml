@@ -34,7 +34,7 @@ runs:
       run: |
         # Start the svix command in the background so once this step finishes, svix will still be running in the action runner instance for the next step to use the callback_url output
         touch /tmp/svix.log
-        svix listen ${{ inputs.port }}${{ inputs.logging && ' --no-logging' || '' }} >/tmp/svix.log &
+        svix listen http://localhost:${{ inputs.port }}${{ inputs.logging && ' --no-logging' || '' }} >/tmp/svix.log &
 
         # Watch Svix logs for 15 seconds
         timeout=15
