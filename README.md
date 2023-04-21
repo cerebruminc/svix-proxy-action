@@ -39,9 +39,12 @@ Inputs are provided using the `with:` section of your workflow YML file.
 | key     | Description                         | Required | Default |
 | ------- | ----------------------------------- | -------- | ------- |
 | port    | Localhost port to proxy traffic for | true     |         |
+| path    | Path to include in proxied request  | false    | /       |
 | logging | Enable proxy logs                   | false    | false   |
 
 `logging` will emit a URL in your action runner that you can visit to see requests sent to the postback URL.
+
+`path` is used if your service expects webhooks to go to `localhost:8080/webhooks` for example. Otherwise, requests to the proxy URL will just go to `localhost:8080/`.
 
 ## Outputs
 

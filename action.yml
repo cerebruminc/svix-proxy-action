@@ -9,6 +9,9 @@ inputs:
   port:
     description: "Local port to proxy traffic to"
     required: true
+  path:
+    description: "Specify an HTTP path on the local service"
+    required: false
   logging:
     description: "Enable postback logs (logs a URL you can visit to view requests proxied)"
     required: false
