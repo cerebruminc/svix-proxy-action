@@ -30,7 +30,7 @@ runs:
       shell: bash
     - run: sudo dpkg -i svix_0.19.0_linux_amd64.deb
       shell: bash
-    - run: sudo apt-get install colorized-logs # this is to strip ansi chars from svix stdout
+    - run: sudo apt-get update && sudo apt-get install colorized-logs # this is to strip ansi chars from svix stdout
       shell: bash
     - name: Start Svix proxy
       id: proxy
