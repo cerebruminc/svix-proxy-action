@@ -1,0 +1,61 @@
+name: test
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Webhook Integration Tests
+    steps:
+      - name: Checkout svix-proxy-action
+        uses: actions/checkout@v3
+      - run: sudo apt-get install colorized-logs # this is to strip ansi chars from svix stdout
+        shell: bash
+      - name: Run local copy of svix-proxy-action
+        uses: ./
+        id: proxy
+        with:
+          port: 8080
+          path: /webhook
+          logging: true
+      - name: Test postback URL
+        shell: bash
+        run: |
+          LOG_FILE="requests.log"
+          # start an HTTP server on port 8080
+          echo -e "HTTP/1.1 200 OK\n\n" | nc -l -p 8080 -N > $LOG_FILE &
+          # send HTTP request to postback_url
+          DATA="name=test&type=user"
+          curl -fX POST -d $DATA ${{ steps.proxy.outputs.postback_url }}
+          # wait for up to 60 seconds for the server to log the request
+          ATTEMPTS=60
+          FOUND=false
+          while [ $ATTEMPTS -gt 0 ]; do
+            if cat "$LOG_FILE" | ansi2txt | grep -q "$DATA"; then
+              echo "Webhook data found"
+              FOUND=true
+              break
+            else
+              echo "Did not find webhook data, waiting 1 second and rechecking..."
+              sleep 1
+              ATTEMPTS=$((ATTEMPTS-1))
+            fi
+          done
+          echo "==="
+          echo "Log file:"
+          cat "$LOG_FILE"
+          echo "==="
+          echo "Svig logs:"
+          cat "/tmp/svix.log" | ansi2txt
+          echo "==="
+          # check if data was found
+          if ! $FOUND; then
+            echo "Local server expecting webhook data did not log anything"
+            echo "Maybe nothing was sent ?"
+            exit 1
+          fi
