@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Webhook Integration Tests
     steps:
-      - uses: cerebruminc/svix-proxy-action@latest
+      - uses: cerebruminc/svix-proxy-action@v1
         id: proxy
         with:
           port: 8080
