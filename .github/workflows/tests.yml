@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout svix-proxy-action
         uses: actions/checkout@v3
-      - run: sudo apt-get install colorized-logs # this is to strip ansi chars from svix stdout
-        shell: bash
       - name: Run local copy of svix-proxy-action
         uses: ./
         id: proxy
@@ -26,36 +24,48 @@ jobs:
       - name: Test postback URL
         shell: bash
         run: |
-          LOG_FILE="requests.log"
+          LOG_FILE="/tmp/svix.log"
           # start an HTTP server on port 8080
-          echo -e "HTTP/1.1 200 OK\n\n" | nc -l -p 8080 -N > $LOG_FILE &
+          echo -e "HTTP/1.1 200 OK\n\n" | nc -l -p 8080 -N &
           # send HTTP request to postback_url
-          DATA="name=test&type=user"
-          curl -fX POST -d $DATA ${{ steps.proxy.outputs.postback_url }}
-          # wait for up to 60 seconds for the server to log the request
-          ATTEMPTS=60
+          json_payload=$(cat <<EOF
+          {
+            "event_type": "user_created",
+            "event_id": "01234567-89ab-cdef-0123-456789abcdef",
+            "timestamp": "2023-04-27T10:15:00.000Z",
+            "data": {
+              "user_id": "987654321",
+              "first_name": "John",
+              "last_name": "Doe",
+              "email": "john.doe@example.com",
+              "created_at": "2023-04-27T10:10:00.000Z"
+            }
+          }
+          EOF
+          )
+          curl -sX POST -H "Content-Type: application/json" -d "$json_payload" ${{ steps.proxy.outputs.postback_url }}
+          # wait for the server to log the request
+          ATTEMPTS=3
           FOUND=false
-          while [ $ATTEMPTS -gt 0 ]; do
-            if cat "$LOG_FILE" | ansi2txt | grep -q "$DATA"; then
-              echo "Webhook data found"
+          REQUEST_LOG="Forwarding Message to: http://localhost:8080/webhook"
+          RESPONSE_LOG="Recieved \"200 OK\" response, forwarding to webhook sender"
+          while [ "$ATTEMPTS" -gt 0 ]; do
+            if grep -q "$REQUEST_LOG" <"$LOG_FILE" && grep -q "$RESPONSE_LOG" <"$LOG_FILE"; then
+              echo "Webhook was received!"
               FOUND=true
               break
             else
-              echo "Did not find webhook data, waiting 1 second and rechecking..."
-              sleep 1
+              echo "Did not find webhook request, waiting a few seconds and rechecking..."
+              sleep 5
               ATTEMPTS=$((ATTEMPTS-1))
             fi
           done
-          echo "==="
-          echo "Log file:"
-          cat "$LOG_FILE"
-          echo "==="
-          echo "Svig logs:"
-          cat "/tmp/svix.log" | ansi2txt
-          echo "==="
           # check if data was found
           if ! $FOUND; then
-            echo "Local server expecting webhook data did not log anything"
-            echo "Maybe nothing was sent ?"
+            echo "Expected to find:"
+            echo "REQUEST: $REQUEST_LOG"
+            echo "RESPONSE: $RESPONSE_LOG"
+            echo "Found:"
+            ansi2txt <"$LOG_FILE"
             exit 1
           fi
